@@ -131,7 +131,45 @@ under the operation of JVP and transpose rules.
 
 
 ### `jax.lax.scan`
-TODO
+The doc says the Haskell-like type signature is
+```haskell
+scan :: (c -> a -> (c, b)) -> c -> [a] -> (c, [b])
+```
+To understand this, break it down into smaller parts.
+`scan` takes
+1. a function `f` with signature `f :: (c, a) -> (c, b)` which is equivalent to `f :: (c -> a -> (c, b))` according to ChatGTP
+2. a carry `c` and an array of things `[a]`
+and returns the carry `c` with another array of things `[b]`.
+
+It’s like a “fold” (reduce) that also records an output at every step.
+Note that the loop-carried value carry must hold a fixed shape and dtype across all iterations.
+`scan` compiles `f`, so while it can be combined with `jit`, it’s usually unnecessary.
+`scan` is designed for iterating with a static number of iterations (compare with `fori_loop()` or `while_loop()`).
+
+**IMPORTANT!** When your per-step output is a PyTree, JAX will stack each leaf # across time, which looks like a transpose from
+“sequence of pytrees” to “pytree of sequences”! Example:
+```python
+# scan :: (f, (c, [a])) -> (c, [b])
+# f :: (c, a) -> (c, b)
+def inference_loop(rng_key, kernel, initial_state, num_samples):
+    @jax.jit
+    def one_step(state, rng_key):  # f :: (c, a) -> (c, b)
+        state, info = kernel(rng_key, state)
+        return state, (state, info)
+
+    keys = jax.random.split(rng_key, num_samples)
+    # (f, (c, [a])) -> (c, [b])
+    _, (states, infos) = jax.lax.scan(one_step, initial_state, keys)
+    # note that b is a PyTree (per-step output) so JAX will stack each leaf
+    # across time, which looks like a transpose from “sequence of pytrees”
+    # to “pytree of sequences”
+
+    return states, infos
+```
+here the output of `scan` should be a list of tuples `[(state0, info0), (state1, info1), ...]`, but since `b` is a PyTree,
+we get instead what we want, i.e. `([state0, state1, ...], [info0, info1, ...])`.
+The `b` PyTree from `f` dictates the PyTree output of the scanned function.
+
 
 ### MapReduce
 The
