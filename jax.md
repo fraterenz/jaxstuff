@@ -131,6 +131,8 @@ under the operation of JVP and transpose rules.
 
 
 ### `jax.lax.scan`
+A XLA-friendly for loop (compiled, no Python overhead).
+
 The doc says the Haskell-like type signature is
 ```haskell
 scan :: (c -> a -> (c, b)) -> c -> [a] -> (c, [b])
@@ -146,7 +148,7 @@ Note that the loop-carried value carry must hold a fixed shape and dtype across 
 `scan` compiles `f`, so while it can be combined with `jit`, it’s usually unnecessary.
 `scan` is designed for iterating with a static number of iterations (compare with `fori_loop()` or `while_loop()`).
 
-**IMPORTANT!** When your per-step output is a PyTree, JAX will stack each leaf # across time, which looks like a transpose from
+**IMPORTANT!** When your per-step output is a PyTree, JAX will stack each leaf nb across time, which looks like a transpose from
 “sequence of pytrees” to “pytree of sequences”! Example:
 ```python
 # scan :: (f, (c, [a])) -> (c, [b])
