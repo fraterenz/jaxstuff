@@ -1,5 +1,6 @@
 # BlackJAX
 BlackJAX is an MCMC sampling library based on JAX. BlackJAX provides well-tested and ready to use sampling algorithms.
+For an example, see notebook `cox-process.ipynb`.
 
 Remember that the log density has to be a pure JAX function (as JAX applies `grad` to it), so something like this won't work:
 
