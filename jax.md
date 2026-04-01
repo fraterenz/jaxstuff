@@ -96,10 +96,52 @@ prefix = lax.associative_scan(operator.add, x)
 ```
 See also this [video](https://www.youtube.com/watch?v=NlQ1N3W3Wms).
 
-## `vmap`
-TODO.
-The reduction must be monoidal (the operation must be associative, and the initial value must be an identity wrt that operation), or the result is undefined. Since the reduction is monoidal, it can be parallised via tree reduction, and JAX will do this automatically.
+## Parallel code
+In JAX computation follows data placement, hence to get parallel computation you need shard
+[Three ways](https://docs.jax.dev/en/latest/sharded-computation.html) to get parallel code in JAX.
+Every `jax.Array` has an attribute `sharding` whcih is a `sharding.Sharding` object.
+This specialises into `SingleDeviceSharding` and `NamedSharding`, which is required by `shard_map` and manually sharding.
 
+Examples of sharding arrays onto different CPU cores.
+```python
+from jax.sharding import Mesh, NamedSharding
+from jax.sharding import PartitionSpec as P
+arr = jnp.arange(32).reshape(4, 8)
+mesh = jax.make_mesh((2, 4), ('x', 'y'))
+sharding = jax.sharding.NamedSharding(mesh, P('x', 'y'))
+arr_shard = jax.sharding.device_put(arr, sharding)
+```
+this will spread 2x2 data from `arr` into each CPU core, since (4, 8) / (2, 4) -> (2, 2).
+
+Another example with sharding (1, 4)-sized data into each CPU core
+```python
+from jax.sharding import Mesh, NamedSharding
+from jax.sharding import PartitionSpec as P
+arr = jnp.arange(32).reshape(4, 8)
+mesh = jax.make_mesh((4, 2), ('x', 'y'))  # change here
+sharding = jax.sharding.NamedSharding(mesh, P('x', 'y'))
+arr_shard = jax.sharding.device_put(arr, sharding)
+```
+this is (4, 8) / (4, 2) -> (1, 4).
+
+Calling a function with `jit` on `arr_shard` will run code automatically.
+
+When reducing the dimensions with for example summing on one axis, data will be repeated on some devices.
+To avoid to much repetition, think about the mesh size.
+For example, `jax.lax.psum` on the first axis will generate replicated data on 2 devices and on 4 devices for the first and the second example.
+
+### `vmap`
+Mapping your function and it will run in parallel, for free!
+Not exactly for free: the reduction must be monoidal (the operation must be associative, and the initial value must be an identity wrt that operation), or the result is undefined.
+Since the reduction is monoidal, it can be parallised via tree reduction, and JAX will do this automatically.
+
+Here the parallel computation is at the instruction level (SIMD).
+Meaning that at each time, the same instruction is performed.
+Will not work well with concurrency programs, see `shard_map`.
+
+### `shard_map`
+When you need SPMD, that is you need concurrency.
+See NUTS in `blackjax.md` for an example.
 
 ## Pseudo random nb gen
 JAX implements an explicit PRNG where entropy production and consumption are handled by explicitly passing and
